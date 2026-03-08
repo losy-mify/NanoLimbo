@@ -4,11 +4,11 @@ EXT_DIR="/home/container/.tmp/chrome_ext"
 
 cd "$PROOT_DIR"
 
-# 清理旧的僵尸进程
+# 1. 强力清理旧的僵尸进程
 killall chromium-browser 2>/dev/null
 killall Xvnc 2>/dev/null
 
-# 动态生成全自动 Chrome 扩展程序
+# 2. 动态生成全自动 Chrome 扩展程序
 mkdir -p "$EXT_DIR"
 cat > "$EXT_DIR/manifest.json" << 'EOF'
 {
@@ -25,7 +25,7 @@ cat > "$EXT_DIR/manifest.json" << 'EOF'
 }
 EOF
 
-# 生成注入的 JS 脚本
+# 3. 生成注入的 JS 核心控制代码
 cat > "$EXT_DIR/content.js" << 'EOF'
 (async function() {
     const CONFIG = {
@@ -33,17 +33,17 @@ cat > "$EXT_DIR/content.js" << 'EOF'
         PASS: "AkiRa13218*#",
         SERVER_ID: "425990",
         AUTH: "Bearer RE9yYzdlNEJvNXpSeVBjR0FoVmVRZ1FoOXBmbnlmbWQ=",
-        INTERVAL: 225 * 60 * 1000
+        INTERVAL: 225 * 60 * 1000 // 3小时45分钟
     };
 
-    // 把日志发送给 Java 插件
+    // 将日志发送到 Java 端的本地服务器
     const sendLog = async (msg) => {
         try { await fetch("http://127.0.0.1:18080/botlog", { method: "POST", body: msg }); } catch(e) {}
     };
 
     sendLog("网页已加载: " + window.location.pathname);
 
-    // 逻辑 1: 自动登录
+    // 逻辑 A: 自动登录
     if (window.location.href.includes("/connexion")) {
         sendLog("🔑 检测到未登录，正在执行自动填表与登录...");
         setTimeout(() => {
@@ -57,14 +57,14 @@ cat > "$EXT_DIR/content.js" << 'EOF'
                 const remember = document.querySelector('#remember');
                 if(remember) remember.checked = true;
                 
-                sendLog("📤 表单已填充，点击登录按钮");
+                sendLog("📤 表单已填充，点击登录按钮...");
                 loginBtn.click();
             } else {
-                sendLog("⚠️ 找不到登录输入框，可能网页结构改变");
+                sendLog("⚠️ 找不到登录输入框，网页结构可能已改变");
             }
         }, 3000);
     } 
-    // 逻辑 2: 监控 Token 并发送重启
+    // 逻辑 B: 监控 Token 并发送重启指令
     else if (window.location.href.includes(`/my/server/${CONFIG.SERVER_ID}`)) {
         sendLog("📍 目标服务器控制台就绪，开始扫描验证码...");
         
@@ -84,7 +84,7 @@ cat > "$EXT_DIR/content.js" << 'EOF'
                         const data = await res.json();
                         if (data?.api?.code === 200) {
                             sendLog("✅ [核心] 远程服务器重启指令下发成功！");
-                            sendLog(`💤 任务完成，休眠 ${CONFIG.INTERVAL / 60000} 分钟...`);
+                            sendLog(`💤 任务完成，本轮休眠 ${CONFIG.INTERVAL / 60000} 分钟...`);
                         } else {
                             sendLog(`❌ 请求失败: ${JSON.stringify(data)}`);
                         }
@@ -96,9 +96,9 @@ cat > "$EXT_DIR/content.js" << 'EOF'
         }
         
         runTask(); // 立即执行
-        setInterval(() => location.reload(), CONFIG.INTERVAL); 
+        setInterval(() => location.reload(), CONFIG.INTERVAL); // 定时刷新开启下一轮
     } 
-    // 逻辑 3: 自动跳转
+    // 逻辑 C: 自动跳转
     else {
         sendLog("🔃 自动跳转至目标服务器页面...");
         window.location.href = `https://minestrator.com/my/server/${CONFIG.SERVER_ID}`;
@@ -108,11 +108,14 @@ EOF
 
 chmod +x ./proot
 
-# 在后台模式启动浏览器，并将底层日志输出到 minebot_debug.log
+# 4. 启动后台 proot 容器（加入锁清理和报错输出）
 PROOT_STARTED=1 nohup ./proot -S ./rootfs -b /proc -b /sys -w "$PROOT_DIR" /bin/sh -c "
     export PATH=/sbin:/bin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
     export DISPLAY=:1
     export HOME='/config'
+    
+    echo '🧹 0. 清理残留的显示器锁文件...'
+    rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1
     
     echo '🚀 1. 正在启动 Xvnc...'
     Xvnc :1 -geometry 1024x768 -depth 16 -SecurityTypes None &
