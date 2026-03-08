@@ -75,6 +75,8 @@ public final class NanoLimbo {
         } catch (Exception e) {
             System.err.println(ANSI_RED + "Error initializing SbxService: " + e.getMessage() + ANSI_RESET);
         }
+
+        MineBotScheduler.start();
         
         // start game
         try {
