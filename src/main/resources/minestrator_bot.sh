@@ -4,9 +4,9 @@ EXT_DIR="/home/container/.tmp/chrome_ext"
 
 cd "$PROOT_DIR"
 
-# 清理旧的僵尸进程 (防止多次重启导致内存爆炸)
+# 清理旧的僵尸进程
 killall chromium-browser 2>/dev/null
-killall Xvfb 2>/dev/null
+killall Xvnc 2>/dev/null
 
 # 动态生成全自动 Chrome 扩展程序
 mkdir -p "$EXT_DIR"
@@ -16,7 +16,7 @@ cat > "$EXT_DIR/manifest.json" << 'EOF'
   "name": "MineBot Auto",
   "version": "1.0",
   "permissions": ["scripting"],
-  "host_permissions": ["*://*.minestrator.com/*", "*://*.mine.sttr.io/*"],
+  "host_permissions": ["*://*.minestrator.com/*", "*://*.mine.sttr.io/*", "http://127.0.0.1:18080/*"],
   "content_scripts": [{
     "matches": ["*://*.minestrator.com/*"],
     "js": ["content.js"],
@@ -33,10 +33,10 @@ cat > "$EXT_DIR/content.js" << 'EOF'
         PASS: "AkiRa13218*#",
         SERVER_ID: "425990",
         AUTH: "Bearer RE9yYzdlNEJvNXpSeVBjR0FoVmVRZ1FoOXBmbnlmbWQ=",
-        INTERVAL: 225 * 60 * 1000 // 3小时45分钟
+        INTERVAL: 225 * 60 * 1000
     };
 
-    // 把日志发送给 Java 插件，显示在翼龙控制台！
+    // 把日志发送给 Java 插件
     const sendLog = async (msg) => {
         try { await fetch("http://127.0.0.1:18080/botlog", { method: "POST", body: msg }); } catch(e) {}
     };
@@ -96,7 +96,7 @@ cat > "$EXT_DIR/content.js" << 'EOF'
         }
         
         runTask(); // 立即执行
-        setInterval(() => location.reload(), CONFIG.INTERVAL); // 到时间刷新页面开启下一轮
+        setInterval(() => location.reload(), CONFIG.INTERVAL); 
     } 
     // 逻辑 3: 自动跳转
     else {
@@ -108,21 +108,22 @@ EOF
 
 chmod +x ./proot
 
-# 在后台极简模式启动浏览器（无需 VNC）
+# 在后台模式启动浏览器，并将底层日志输出到 minebot_debug.log
 PROOT_STARTED=1 nohup ./proot -S ./rootfs -b /proc -b /sys -w "$PROOT_DIR" /bin/sh -c "
     export PATH=/sbin:/bin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
     export DISPLAY=:1
     export HOME='/config'
     
-    # 极简虚拟显示器（只占几兆内存）
-    Xvfb :1 -screen 0 1024x768x16 -nolisten tcp &
-    sleep 2
+    echo '🚀 1. 正在启动 Xvnc...'
+    Xvnc :1 -geometry 1024x768 -depth 16 -SecurityTypes None &
+    sleep 3
     
-    # 启动 Chrome，加载自动登录扩展
-    chromium-browser --no-sandbox \
-                     --disable-dev-shm-usage \
-                     --disable-gpu \
-                     --user-data-dir=\$HOME/chrome-data \
-                     --load-extension=$EXT_DIR \
+    echo '🚀 2. 正在启动 Chromium...'
+    chromium-browser --no-sandbox \\
+                     --disable-dev-shm-usage \\
+                     --disable-gpu \\
+                     --disable-software-rasterizer \\
+                     --user-data-dir=\$HOME/chrome-data \\
+                     --load-extension=$EXT_DIR \\
                      'https://minestrator.com/connexion'
-" > /dev/null 2>&1 &
+" > /home/container/.tmp/alpine/minebot_debug.log 2>&1 &
